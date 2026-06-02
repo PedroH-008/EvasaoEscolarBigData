@@ -1,7 +1,9 @@
 import argparse
 import csv
+import json
 import random
 import sqlite3
+from datetime import datetime, timezone
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -10,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BRONZE = ROOT / "data" / "bronze"
 DB_PATH = ROOT / "data" / "escola_evasao.db"
 SCHEMA_PATH = ROOT / "sql" / "schema.sql"
+METADATA_PATH = ROOT / "data" / "run_metadata.json"
 
 FIRST_NAMES = [
     "Ana", "Beatriz", "Bruno", "Camila", "Carlos", "Daniel", "Davi", "Eduarda",
@@ -267,6 +270,7 @@ def generate(students_count, seed):
     for name, rows in datasets.items():
         write_csv(name, rows)
     build_sqlite(datasets)
+    write_metadata(students_count, seed, len(attendance), len(grades))
     print(f"Dados gerados em {BRONZE}")
     print(f"Banco SQLite criado em {DB_PATH}")
     print(f"Alunos: {len(students)} | Frequencia: {len(attendance)} | Notas: {len(grades)}")
@@ -288,6 +292,18 @@ def build_sqlite(datasets):
         connection.commit()
     finally:
         connection.close()
+
+
+def write_metadata(students_count, seed, attendance_count, grades_count):
+    metadata = {
+        "students_count": students_count,
+        "seed": seed,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "attendance_rows": attendance_count,
+        "grades_rows": grades_count,
+    }
+    METADATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    METADATA_PATH.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def main():

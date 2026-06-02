@@ -38,6 +38,8 @@ python -m pip install -r requirements.txt
 python src/generate_school_data.py --students 2500
 ```
 
+Se quiser aumentar a base, troque o valor de `--students` para 5000, 10000 ou outro número. O dashboard passa a refletir o volume gerado automaticamente.
+
 5. Configure o Java e execute o pipeline Spark:
 
 ```bash
@@ -161,6 +163,7 @@ Esse erro costuma aparecer quando o Java não está instalado, quando JAVA_HOME 
 - O projeto foi estruturado para demonstrar análise orientada a decisão.
 - O dashboard foi pensado para facilitar a leitura do professor, com filtros, indicadores e visão individual do aluno.
 - A solução principal usa Spark, então a execução depende de Java configurado.
+- O tamanho da base é configurável pelo parâmetro `--students` no gerador de dados.
 
 ## Documentação complementar
 

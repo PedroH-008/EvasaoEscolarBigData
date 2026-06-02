@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 from typing import Optional
 
@@ -10,6 +11,7 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 GOLD = ROOT / "data" / "gold"
 BRONZE = ROOT / "data" / "bronze"
+RUN_METADATA = ROOT / "data" / "run_metadata.json"
 
 
 @st.cache_data(ttl=600)
@@ -27,6 +29,15 @@ def read_bronze(name: str) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame()
     return pd.read_csv(path)
+
+
+def read_run_metadata() -> dict:
+    if not RUN_METADATA.exists():
+        return {}
+    try:
+        return json.loads(RUN_METADATA.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
 
 def fmt_int(x: int) -> str:
     return f"{int(x):,}".replace(",", ".")
@@ -57,6 +68,8 @@ students_bronze = read_bronze("students")
 socio_bronze = read_bronze("socioeconomic")
 attendance_bronze = read_bronze("attendance")
 grades_bronze = read_bronze("grades")
+run_metadata = read_run_metadata()
+students_generated = int(run_metadata.get("students_count", len(scores)))
 
 
 # Sidebar: filtros globais e busca
@@ -71,7 +84,14 @@ min_absence = st.sidebar.slider("Frequência mínima (taxa de faltas)", 0.0, 1.0
 
 st.sidebar.markdown("---")
 search_input = st.sidebar.text_input("Buscar aluno por nome ou ID")
-top_n = st.sidebar.number_input("Mostrar top N alunos", min_value=10, max_value=1000, value=100, step=10)
+default_top_n = min(200, max(20, students_generated // 25))
+top_n = st.sidebar.number_input(
+    "Mostrar top N alunos",
+    min_value=10,
+    max_value=1000,
+    value=default_top_n,
+    step=10,
+)
 
 
 filtered = scores[
@@ -87,6 +107,7 @@ if search_input:
     filtered = filtered[mask]
 
 st.sidebar.markdown(f"Alunos filtrados: **{len(filtered):,}**")
+st.sidebar.caption(f"Base atual: {students_generated:,} alunos gerados".replace(",", "."))
 
 # Top KPIs
 kp1, kp2, kp3, kp4 = st.columns(4)
@@ -95,14 +116,20 @@ kp2.metric("Evadidos", fmt_int(kpis["dropouts"]))
 kp3.metric("Risco médio", f"{kpis['avg_dropout_risk']:.1%}")
 kp4.metric("AUC do modelo", f"{kpis['model_auc']:.3f}")
 
+volume_col1, volume_col2, volume_col3 = st.columns(3)
+volume_col1.metric("Base gerada", fmt_int(students_generated))
+volume_col2.metric("Base exibida", fmt_int(len(filtered)))
+volume_col3.metric("Taxa de retenção", f"{(len(filtered) / students_generated):.1%}" if students_generated else "-")
+
 # Row with distribution and neighborhood
 dist_col, neigh_col = st.columns([2, 3])
 with dist_col:
     st.subheader("Distribuição de risco")
+    hist_bins = min(40, max(20, students_generated // 100))
     fig = px.histogram(
         scores,
         x="dropout_risk",
-        nbins=30,
+        nbins=hist_bins,
         color="risk_band",
         labels={"dropout_risk": "Probabilidade de evasão"},
         marginal="box",
@@ -187,6 +214,11 @@ st.dataframe(display_df.head(top_n), use_container_width=True, height=420)
 
 csv_bytes = filtered.to_csv(index=False).encode("utf-8")
 st.download_button("Exportar filtrado (CSV)", csv_bytes, file_name="alunos_filtrados.csv", mime="text/csv")
+
+st.info(
+    f"A visualização está baseada na última base gerada com **{students_generated:,} alunos**. "
+    "Se você rodar o gerador com um número maior de estudantes, o dashboard refletirá automaticamente o novo volume.".replace(",", ".")
+)
 
 
 # Painel de detalhe do aluno
